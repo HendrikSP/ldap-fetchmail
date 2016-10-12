@@ -1,0 +1,45 @@
+#!/bin/sh
+
+FETCHMAILRC=$1
+PROG=`basename $0`
+
+if [ -z "$FETCHMAILRC" ]; then
+  echo "$PROG: Usage $0 <fetchmailrc>"
+  exit 1
+fi
+
+. /etc/fetchmail/fetchmail.ldap.conf
+
+FETCHMAIL_ATTRIBUTES="cn uid fetchmailUsername fetchmailPassword fetchmailServer fetchmailProtocol fetchmailSSL fetchmailCustom"
+
+cat /etc/fetchmail/fetchmailrc.header > $FETCHMAILRC
+echo >> $FETCHMAILRC
+echo >> $FETCHMAILRC
+
+generate () {
+  SSL=''
+  if [ "$fetchmailSSL" = 'TRUE' ]; then
+    SSL=' ssl'
+  fi
+  echo "$PROG: Generating $dn"
+  echo "# $dn" >> $FETCHMAILRC
+  echo "poll ${fetchmailServer} proto ${fetchmailProtocol} user ${fetchmailUsername}" >> $FETCHMAILRC
+  echo "  pass ${fetchmailPassword} is ${uid} here ${fetchmailCustom}${SSL}" >> $FETCHMAILRC
+  echo >> $FETCHMAILRC
+}
+
+resetEnv () {
+  for x in 'dn' ${FETCHMAIL_ATTRIBUTES}; do
+    unset $x
+  done
+}
+
+eval `ldapsearch \
+  -LLL \
+  -H $LDAP_URI \
+  -x -D $BIND_DN -w $BIND_PW \
+  -b $BASE_DN \
+  "(&(objectClass=fetchmail)(fetchmailEnabled=TRUE))" \
+  $FETCHMAIL_ATTRIBUTES \
+  | sed -E -e 's/^([^:]*): (.*)$/\1="\2";/' \
+  | sed -E -e 's/^$/generate;\nresetEnv;/'`

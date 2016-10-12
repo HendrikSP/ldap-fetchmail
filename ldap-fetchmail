@@ -1,0 +1,39 @@
+#!/bin/sh
+
+FETCHMAILRC=$HOME/fetchmailrc
+PROG=`basename $0`
+
+create_fetchmailrc () {
+  echo "$PROG: Creating $FETCHMAILRC"
+  make-fetchmailrc $FETCHMAILRC
+  chmod 600 $FETCHMAILRC
+}
+
+quit () {
+  echo "$PROG: Stopping"
+	exit 0
+}
+
+resume () {
+  echo "$PROG: Reloading"
+  NEXT_RUN_TIME=0
+}
+
+trap quit SIGINT SIGTERM
+trap resume SIGHUP
+
+while true; do
+
+  create_fetchmailrc
+
+  echo "$PROG: Running Fetchmail"
+
+  NEXT_RUN_TIME=$((`date +"%s"` + ${FETCHMAIL_INTERVAL_SECONDS:-300}))
+
+  fetchmail --fetchmailrc $FETCHMAILRC --logfile /dev/stdout "$@"
+
+  while [ `date +"%s"` -lt $NEXT_RUN_TIME ]; do
+    sleep 1
+  done
+
+done
